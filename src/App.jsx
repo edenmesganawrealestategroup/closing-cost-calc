@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calculator, DollarSign, Percent, FileText, Home, RefreshCw, Printer, Key, Tag } from 'lucide-react';
+import { Calculator, DollarSign, Percent, FileText, Home, RefreshCw, Printer, Key, Tag, MapPin, UserCheck } from 'lucide-react';
 
 export default function App() {
   const [mode, setMode] = useState('sell'); // 'sell' or 'buy'
@@ -14,7 +14,8 @@ export default function App() {
   // --- State for Buyer Inputs ---
   const [purchasePrice, setPurchasePrice] = useState(650000);
   const [downPaymentPercent, setDownPaymentPercent] = useState(20);
-  const [landTransferTax, setLandTransferTax] = useState(8475);
+  const [isToronto, setIsToronto] = useState(false);
+  const [isFirstTimeBuyer, setIsFirstTimeBuyer] = useState(false);
   const [buyerLegalFees, setBuyerLegalFees] = useState(1500);
   const [titleInsurance, setTitleInsurance] = useState(500);
   const [homeInspection, setHomeInspection] = useState(500);
@@ -26,6 +27,43 @@ export default function App() {
   const netProceeds = sellingPrice - totalClosingCosts;
 
   // Buyer Calculations
+  const calculateLTT = (price, inToronto, firstTime) => {
+    let ontarioTax = 0;
+    
+    // Ontario Brackets
+    if (price > 400000) {
+      ontarioTax += (Math.min(price, 2000000) - 400000) * 0.02;
+      if (price > 2000000) {
+        ontarioTax += (price - 2000000) * 0.025;
+      }
+      ontarioTax += 4475; // Cumulative tax up to $400k
+    } else if (price > 250000) {
+      ontarioTax += (price - 250000) * 0.015 + 2225; // Cumulative up to $250k
+    } else if (price > 55000) {
+      ontarioTax += (price - 55000) * 0.01 + 275; // Cumulative up to $55k
+    } else if (price > 0) {
+      ontarioTax += price * 0.005;
+    }
+
+    let torontoTax = 0;
+    if (inToronto) {
+      torontoTax = ontarioTax; // Toronto Municipal LTT mathematically mirrors Ontario LTT
+    }
+
+    let ontarioRebate = 0;
+    let torontoRebate = 0;
+    
+    if (firstTime) {
+      ontarioRebate = Math.min(ontarioTax, 4000);
+      if (inToronto) {
+        torontoRebate = Math.min(torontoTax, 4475);
+      }
+    }
+    
+    return Math.max(0, ontarioTax - ontarioRebate) + Math.max(0, torontoTax - torontoRebate);
+  };
+
+  const landTransferTax = calculateLTT(purchasePrice, isToronto, isFirstTimeBuyer);
   const downPaymentAmount = purchasePrice * (downPaymentPercent / 100);
   const mortgageAmount = purchasePrice - downPaymentAmount;
   const totalBuyerClosingCosts = landTransferTax + buyerLegalFees + titleInsurance + homeInspection;
@@ -57,7 +95,8 @@ export default function App() {
     } else {
       setPurchasePrice(650000);
       setDownPaymentPercent(20);
-      setLandTransferTax(8475);
+      setIsToronto(false);
+      setIsFirstTimeBuyer(false);
       setBuyerLegalFees(1500);
       setTitleInsurance(500);
       setHomeInspection(500);
@@ -257,20 +296,54 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Land Transfer Tax */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Land Transfer Tax</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <DollarSign size={16} className="text-slate-400" />
+                  {/* Smart Land Transfer Tax Calculator */}
+                  <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-200">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center">
+                      <MapPin size={16} className="mr-2 text-[#E11B22]" />
+                      Land Transfer Tax Details
+                    </h3>
+                    
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                      <label className="text-sm font-medium text-slate-700">Property Location</label>
+                      <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm w-full sm:w-auto">
+                        <button 
+                          onClick={() => setIsToronto(false)}
+                          className={`flex-1 px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${!isToronto ? 'bg-[#E11B22] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          Ontario
+                        </button>
+                        <button 
+                          onClick={() => setIsToronto(true)}
+                          className={`flex-1 px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${isToronto ? 'bg-[#E11B22] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          City of Toronto
+                        </button>
                       </div>
-                      <input
-                        type="number"
-                        value={landTransferTax === 0 ? '' : landTransferTax}
-                        onChange={(e) => setLandTransferTax(Number(e.target.value))}
-                        onFocus={handleFocus}
-                        className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#E11B22] focus:border-[#E11B22] transition-all text-slate-900"
-                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                      <label className="text-sm font-medium text-slate-700">First-Time Home Buyer?</label>
+                      <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm w-full sm:w-auto">
+                        <button 
+                          onClick={() => setIsFirstTimeBuyer(false)}
+                          className={`flex-1 px-6 py-1.5 text-xs font-semibold rounded-md transition-colors ${!isFirstTimeBuyer ? 'bg-[#E11B22] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          No
+                        </button>
+                        <button 
+                          onClick={() => setIsFirstTimeBuyer(true)}
+                          className={`flex-1 px-6 py-1.5 text-xs font-semibold rounded-md transition-colors ${isFirstTimeBuyer ? 'bg-[#E11B22] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          Yes
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
+                       <span className="text-sm text-slate-600 font-semibold">Calculated LTT:</span>
+                       <span className="text-lg font-bold text-[#E11B22] bg-[#E11B22]/10 px-3 py-1 rounded-lg">
+                          {formatCurrency(landTransferTax)}
+                       </span>
                     </div>
                   </div>
 
